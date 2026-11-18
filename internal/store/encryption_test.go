@@ -159,11 +159,11 @@ func TestPlaintextWALMigration(t *testing.T) {
 	image := []byte("original-wal-picture")
 	name := blobName(image, "png")
 	r := &types.Record{ID: "wal", Kind: types.KindImage, Title: "only-in-legacy-wal", Image: name, ListID: "saved"}
-	stmt, err := recordStatement(r, 1)
+	row, err := encodeRecord(r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := transaction(db, []statement{stmt}); err != nil {
+	if err := transaction(db, []statement{row.statement(1)}); err != nil {
 		t.Fatal(err)
 	}
 	for _, suffix := range []string{"", "-wal"} {

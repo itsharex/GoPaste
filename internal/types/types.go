@@ -71,6 +71,8 @@ type Record struct {
 
 	ListID string `json:"listId,omitempty"`
 	Bytes  int64  `json:"bytes,omitempty"`
+	// DatabaseBytes 保存常驻元数据对应的数据库记录字段字节数
+	DatabaseBytes int64 `json:"-"`
 
 	// Hash 保存内容指纹以便重启后继续合并重复记录
 	Hash string `json:"hash,omitempty"`
@@ -122,7 +124,7 @@ type Settings struct {
 	ResetPanelAfterPaste bool `json:"resetPanelAfterPaste"`
 	LinkPreview          bool `json:"linkPreview"`
 	MaxRecords           int  `json:"maxRecords"`
-	// HistoryLimitMiB 限制未分组历史引用的独立文件总容量
+	// HistoryLimitMiB 限制未分组历史的数据库记录和独占本地资源总容量
 	HistoryLimitMiB int  `json:"historyLimitMiB"`
 	RetentionDays   int  `json:"retentionDays"`
 	LaunchAtLogin   bool `json:"launchAtLogin"`

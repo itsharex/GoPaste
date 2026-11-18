@@ -15,7 +15,7 @@ import (
 	"gopaste/internal/types"
 )
 
-// ErrHistoryLimit 表示单条记录的资源已超过自动历史容量上限
+// ErrHistoryLimit 表示单条记录及其本地资源已超过自动历史容量上限
 var ErrHistoryLimit = errors.New("store: record exceeds history storage limit")
 
 // blobName 按原始字节生成资源文件名以复用相同内容
@@ -71,10 +71,10 @@ func references(records []*types.Record) map[string]int64 {
 	return refs
 }
 
-// blobSizeLocked 按原始字节数计算历史资源容量
+// blobSizeLocked 按加密文件的落盘字节数计算本地资源容量
 func (s *Store) blobSizeLocked(name string, pending map[string]int64) (int64, error) {
 	if n, ok := pending[name]; ok {
-		return n, nil
+		return n + 1 + int64(s.cipher.blob.Overhead()), nil
 	}
 	path := s.BlobPath(name)
 	if path == "" {
@@ -87,7 +87,7 @@ func (s *Store) blobSizeLocked(name string, pending map[string]int64) (int64, er
 	if err != nil {
 		return 0, err
 	}
-	return max(0, info.Size()-1-int64(s.cipher.blob.Overhead())), nil
+	return info.Size(), nil
 }
 
 // protectedLocked 汇总普通列表永久保留的资源
@@ -101,7 +101,7 @@ func (s *Store) admitLocked(rec *types.Record, pending map[string]int64) error {
 		return nil
 	}
 	protected := protectedLocked(s.records)
-	var total int64
+	total := rec.DatabaseBytes
 	for name := range references([]*types.Record{rec}) {
 		if _, ok := protected[name]; ok {
 			continue
@@ -118,7 +118,7 @@ func (s *Store) admitLocked(rec *types.Record, pending map[string]int64) error {
 	return nil
 }
 
-// pruneLocked 按条数、期限与独立文件容量保留最新历史并豁免普通列表
+// pruneLocked 按条数、期限、数据库记录与去重资源容量保留最新历史并豁免普通列表
 func (s *Store) pruneLocked(records []*types.Record) ([]*types.Record, error) {
 	used := protectedLocked(records)
 	sizes := make(map[string]int64)
@@ -135,7 +135,7 @@ func (s *Store) pruneLocked(records []*types.Record) ([]*types.Record, error) {
 			continue
 		}
 		refs := references([]*types.Record{r})
-		var extra int64
+		extra := r.DatabaseBytes
 		for name := range refs {
 			if _, ok := used[name]; ok {
 				continue

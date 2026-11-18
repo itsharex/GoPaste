@@ -645,7 +645,7 @@ func (a *App) registerHotkey(acc string) error {
 // storageError 显示历史容量或文件保存失败的必要提示
 func (a *App) storageError(err error) {
 	if errors.Is(err, store.ErrHistoryLimit) {
-		a.toast(locales.ImageStorageLimitReached())
+		a.toast(locales.HistoryStorageLimitReached())
 		return
 	}
 	a.toast(locales.SaveHistoryFailed(err.Error()))

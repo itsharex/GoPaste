@@ -55,11 +55,11 @@ func (s *Store) openDatabase() (version int, err error) {
 				if r.Hash == "" {
 					r.Hash = recordHash(r)
 				}
-				statement, e := recordStatement(r, int64(len(idx.Records)-i))
+				row, e := encodeRecord(r)
 				if e != nil {
 					return 0, e
 				}
-				statements = append(statements, statement)
+				statements = append(statements, row.statement(int64(len(idx.Records)-i)))
 			}
 		}
 	}
@@ -104,7 +104,10 @@ func (s *Store) openDatabase() (version int, err error) {
 		WHERE json_extract(meta,'$.previewState')='loading'`); err != nil {
 		return 0, err
 	}
-	rows, err := s.db.Query("SELECT meta, position FROM records ORDER BY position DESC")
+	rows, err := s.db.Query(`SELECT meta, position,
+		octet_length(id) + octet_length(kind) + octet_length(list_id) + ? +
+		octet_length(meta) + octet_length(summary) + octet_length(payload) + octet_length(search) + octet_length(extensions)
+		FROM records ORDER BY position DESC`, positionBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -112,10 +115,10 @@ func (s *Store) openDatabase() (version int, err error) {
 	s.positions = make(map[string]int64)
 	for rows.Next() {
 		var position int64
-		if err := rows.Scan(&data, &position); err != nil {
+		r := new(types.Record)
+		if err := rows.Scan(&data, &position, &r.DatabaseBytes); err != nil {
 			return 0, err
 		}
-		r := new(types.Record)
 		if err = json.Unmarshal(data, r); err != nil {
 			return 0, err
 		}
@@ -143,15 +146,25 @@ func recordMeta(r *types.Record) *types.Record {
 	return &types.Record{ID: r.ID, Kind: r.Kind, CreatedAt: r.CreatedAt, ListID: r.ListID, Hash: r.Hash, Image: r.Image, PreviewImage: r.PreviewImage, PreviewState: r.PreviewState, Source: types.Source{Icon: r.Source.Icon}}
 }
 
-// recordStatement 生成单条记录及其有限摘要和大小写无关检索字段
-func recordStatement(r *types.Record, position int64) (statement, error) {
+// positionBytes 表示记录排序字段的逻辑字节数
+const positionBytes = 8
+
+// recordRow 保存待写入的数据库字段与用于容量清理的元数据
+type recordRow struct {
+	record                                     *types.Record
+	meta, summary, payload, search, extensions []byte
+}
+
+// encodeRecord 编码历史记录的数据库字段并按实际编码字节计算记录容量
+func encodeRecord(r *types.Record) (recordRow, error) {
 	payload, err := json.Marshal(r)
 	if err != nil {
-		return statement{}, err
+		return recordRow{}, err
 	}
-	meta, err := json.Marshal(recordMeta(r))
+	record := recordMeta(r)
+	meta, err := json.Marshal(record)
 	if err != nil {
-		return statement{}, err
+		return recordRow{}, err
 	}
 	summary := *r
 	summary.Text = summaryText(r.Text)
@@ -162,7 +175,7 @@ func recordStatement(r *types.Record, position int64) (statement, error) {
 	summary.Files = r.Files[:min(3, len(r.Files))]
 	preview, err := json.Marshal(summary)
 	if err != nil {
-		return statement{}, err
+		return recordRow{}, err
 	}
 	fields := []string{r.Text, r.Title, r.URL, r.Color, r.Source.AppName}
 	extensions := []string{}
@@ -189,7 +202,13 @@ func recordStatement(r *types.Record, position int64) (statement, error) {
 	}
 	search, _ := json.Marshal(fields)
 	exts, _ := json.Marshal(extensions)
-	return statement{SQL: `INSERT INTO records(id,position,kind,list_id,meta,summary,payload,search,extensions) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET position=excluded.position,kind=excluded.kind,list_id=excluded.list_id,meta=excluded.meta,summary=excluded.summary,payload=excluded.payload,search=excluded.search,extensions=excluded.extensions`, Args: []any{r.ID, position, string(r.Kind), r.ListID, string(meta), string(preview), string(payload), string(search), string(exts)}}, nil
+	record.DatabaseBytes = int64(len(r.ID) + len(r.Kind) + len(r.ListID) + positionBytes + len(meta) + len(preview) + len(payload) + len(search) + len(exts))
+	return recordRow{record: record, meta: meta, summary: preview, payload: payload, search: search, extensions: exts}, nil
+}
+
+// statement 按指定顺序写入已编码和计量的历史记录
+func (r recordRow) statement(position int64) statement {
+	return statement{SQL: `INSERT INTO records(id,position,kind,list_id,meta,summary,payload,search,extensions) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET position=excluded.position,kind=excluded.kind,list_id=excluded.list_id,meta=excluded.meta,summary=excluded.summary,payload=excluded.payload,search=excluded.search,extensions=excluded.extensions`, Args: []any{r.record.ID, position, string(r.record.Kind), r.record.ListID, string(r.meta), string(r.summary), string(r.payload), string(r.search), string(r.extensions)}}
 }
 
 // summaryText 截取卡片所需的前五百一十二个字符并保留截断提示
@@ -229,12 +248,12 @@ func (s *Store) readRecordsLocked(column, clause string, args ...any) ([]*types.
 }
 
 // commitLocked 原子保存附加语句、记录与顺序，成功后更新元数据并回收资源
-func (s *Store) commitLocked(next []*types.Record, candidates map[string]int64, statements ...statement) error {
-	if candidates == nil {
-		candidates = make(map[string]int64)
-	}
-	for name := range references(s.records) {
-		candidates[name] = 0
+func (s *Store) commitLocked(next []*types.Record, row *recordRow, statements ...statement) error {
+	candidates := references(s.records)
+	if row != nil {
+		for name := range references([]*types.Record{row.record}) {
+			candidates[name] = 0
+		}
 	}
 	positions := make(map[string]int64, len(next))
 	var top int64
@@ -242,25 +261,18 @@ func (s *Store) commitLocked(next []*types.Record, candidates map[string]int64, 
 		top = max(top, p)
 	}
 	kept := make(map[string]*types.Record, len(next))
-	metadata := make([]*types.Record, 0, len(next))
 	for i, r := range next {
 		position := s.positions[r.ID]
 		if i == 0 && (len(s.records) == 0 || s.records[0].ID != r.ID) {
 			position = top + 1
 		}
-		if s.byID[r.ID] != r {
-			statement, err := recordStatement(r, position)
-			if err != nil {
-				return err
-			}
-			statements = append(statements, statement)
-			r = recordMeta(r)
+		if row != nil && r == row.record {
+			statements = append(statements, row.statement(position))
 		} else if position != s.positions[r.ID] {
 			statements = append(statements, statement{SQL: "UPDATE records SET position=? WHERE id=?", Args: []any{position, r.ID}})
 		}
 		positions[r.ID] = position
 		kept[r.ID] = r
-		metadata = append(metadata, r)
 	}
 	for id := range s.byID {
 		if kept[id] == nil {
@@ -272,7 +284,7 @@ func (s *Store) commitLocked(next []*types.Record, candidates map[string]int64, 
 			return err
 		}
 	}
-	s.records, s.byID, s.positions = metadata, kept, positions
+	s.records, s.byID, s.positions = next, kept, positions
 	s.removeUnusedLocked(candidates)
 	return nil
 }

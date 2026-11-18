@@ -1867,24 +1867,20 @@ func (msgs Messages) HistoryStorageLimit() string {
 	return Catalog.Format(msgs.locale, "historyStorageLimit", nil)
 }
 
-// HistoryStorageHint says "容量超出时删除最旧的记录，普通列表永久保留。"
-// in the language the app shows.
+// HistoryStorageHint 返回应用当前语言的历史存储容量说明
 func HistoryStorageHint() string { return In(i18n.Locale()).HistoryStorageHint() }
 
-// HistoryStorageHint says "容量超出时删除最旧的记录，普通列表永久保留。"
-// in the language of msgs.
+// HistoryStorageHint 返回指定语言的历史存储容量说明
 func (msgs Messages) HistoryStorageHint() string {
 	return Catalog.Format(msgs.locale, "historyStorageHint", nil)
 }
 
-// ImageStorageLimitReached says "图片超过历史存储上限，未记录"
-// in the language the app shows.
-func ImageStorageLimitReached() string { return In(i18n.Locale()).ImageStorageLimitReached() }
+// HistoryStorageLimitReached 返回应用当前语言的历史记录超限提示
+func HistoryStorageLimitReached() string { return In(i18n.Locale()).HistoryStorageLimitReached() }
 
-// ImageStorageLimitReached says "图片超过历史存储上限，未记录"
-// in the language of msgs.
-func (msgs Messages) ImageStorageLimitReached() string {
-	return Catalog.Format(msgs.locale, "imageStorageLimitReached", nil)
+// HistoryStorageLimitReached 返回指定语言的历史记录超限提示
+func (msgs Messages) HistoryStorageLimitReached() string {
+	return Catalog.Format(msgs.locale, "historyStorageLimitReached", nil)
 }
 
 // SaveHistoryFailed says "保存历史失败：{error}"

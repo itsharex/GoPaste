@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +13,49 @@ import (
 
 	"gopaste/internal/types"
 )
+
+// TestLinkPreviewStorageLimit 验证超限的预览图或标题不会影响原链接或留下加载状态
+func TestLinkPreviewStorageLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/image":
+			w.Header().Set("Content-Type", "image/png")
+			fmt.Fprint(w, strings.Repeat("a", 1<<20))
+		case "/with-image":
+			fmt.Fprint(w, `<title>网页标题</title><meta property="og:image" content="/image">`)
+		case "/long-title":
+			fmt.Fprintf(w, "<title>%s</title>", strings.Repeat("a", 512<<10))
+		}
+	}))
+	defer server.Close()
+	st, err := openTestStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	settings := st.Settings()
+	settings.HistoryLimitMiB = 1
+	if err := st.SetSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	a := NewApp()
+	a.st = st
+	for _, tc := range []struct{ path, title, state string }{
+		{"/with-image", "网页标题", "done"},
+		{"/long-title", "", "failed"},
+	} {
+		url := server.URL + tc.path
+		rec, _, err := st.Capture(&types.Record{Kind: types.KindLink, URL: url}, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.fetchPreview(rec.ID, url)
+		got, ok := st.Get(rec.ID)
+		if !ok || got.URL != url || got.Title != tc.title || got.PreviewState != tc.state || got.PreviewImage != "" {
+			t.Fatalf("链接 %s 的超限预览保存结果不正确", tc.path)
+		}
+	}
+}
 
 // TestLinkPreviewConcurrency 验证链接标题与图片请求共用两个并发名额
 func TestLinkPreviewConcurrency(t *testing.T) {

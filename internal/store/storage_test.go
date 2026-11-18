@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,7 +92,7 @@ func TestStorageQuotaReferences(t *testing.T) {
 	}
 	one, _ = s.Get(one.ID)
 	captureTest(t, s, &types.Record{ID: "two", Kind: types.KindLink, URL: "https://two.example", PreviewImage: one.PreviewImage}, nil, icon)
-	captureTest(t, s, &types.Record{ID: "file", Kind: types.KindFile, Files: []types.FileRef{{Path: "/external/large", Size: 1 << 40}}, Bytes: 1 << 40}, nil, icon)
+	captureTest(t, s, &types.Record{ID: "file", Kind: types.KindFile, Files: []types.FileRef{{Path: "/external/large.png", Size: 1 << 40}}, Bytes: 1 << 40}, nil, icon)
 	captureTest(t, s, &types.Record{ID: "shared-saved", Kind: types.KindLink, URL: "https://saved.example", PreviewImage: protected.Image}, nil, nil)
 	if len(s.List()) != 5 {
 		t.Fatal("共享资源被重复计费或普通列表占用了容量")
@@ -112,6 +113,72 @@ func TestStorageQuotaReferences(t *testing.T) {
 	}
 	if _, err := s.ReadBlob(one.Source.Icon); err != nil {
 		t.Fatal("仍被文件记录引用的来源图标丢失")
+	}
+}
+
+// TestStorageQuotaRecordBytes 验证多字节文本及检索字段在写入和重启后按同一容量清理
+func TestStorageQuotaRecordBytes(t *testing.T) {
+	s := storageTest(t, 2)
+	body := strings.Repeat("汉", 100<<10)
+	for _, id := range []string{"saved", "old", "new"} {
+		r := &types.Record{ID: id, Kind: types.KindText, Text: id + body}
+		if id == "saved" {
+			r.ListID = "work"
+		}
+		captureTest(t, s, r, nil, nil)
+	}
+	size := s.byID["new"].DatabaseBytes
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := openTestStore(s.Dir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if got := reopened.byID["new"].DatabaseBytes; got != size {
+		t.Fatalf("重启前后记录容量不一致：%d / %d", size, got)
+	}
+	settings := reopened.Settings()
+	settings.HistoryLimitMiB = 1
+	if err := reopened.SetSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reopened.Get("old"); ok {
+		t.Fatal("缩小上限后未按数据库占用清理旧文本")
+	}
+	if _, ok := reopened.Get("new"); !ok {
+		t.Fatal("缩小上限后丢失最新文本")
+	}
+	captureTest(t, reopened, &types.Record{ID: "latest", Kind: types.KindText, Text: "latest" + body}, nil, nil)
+	if got := reopened.List(); len(got) != 2 || got[0].ID != "latest" || got[1].ID != "saved" {
+		t.Fatal("新增文本未按容量保留最新历史与普通列表记录")
+	}
+}
+
+// TestStorageQuotaWithoutBlobs 验证纯文本、富文本和文件引用可独立触及上限且超限更新保留原记录
+func TestStorageQuotaWithoutBlobs(t *testing.T) {
+	s := storageTest(t, 1)
+	original := captureTest(t, s, &types.Record{Kind: types.KindText, Text: "原文"}, nil, nil)
+	body := strings.Repeat("a", 512<<10)
+	files := make([]types.FileRef, 1024)
+	for i := range files {
+		files[i].Path = fmt.Sprintf("/%d/%s.png", i, body[:512])
+	}
+	for _, r := range []*types.Record{
+		{Kind: types.KindText, Text: body},
+		{Kind: types.KindText, HTML: "<p>" + body + body + "</p>"},
+		{Kind: types.KindFile, Files: files},
+	} {
+		if _, _, err := s.Capture(r, nil, nil); !errors.Is(err, ErrHistoryLimit) {
+			t.Fatalf("%s 超限记录未被拒绝：%v", r.Kind, err)
+		}
+	}
+	if _, _, err := s.UpdatePreview(original.ID, nil, "", func(r *types.Record) { r.Text = body }); !errors.Is(err, ErrHistoryLimit) {
+		t.Fatalf("超限文本更新未被拒绝：%v", err)
+	}
+	if got := s.List(); len(got) != 1 || got[0].ID != original.ID || got[0].Text != original.Text {
+		t.Fatal("超限写入改变了已有历史")
 	}
 }
 

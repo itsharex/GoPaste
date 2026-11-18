@@ -74,8 +74,11 @@ func (a *App) fetchPreview(id, url string) {
 		r.PreviewState = "done"
 	}
 	_, _, err = a.st.UpdatePreview(id, image, ext, apply)
-	if errors.Is(err, store.ErrHistoryLimit) {
+	if len(image) > 0 && errors.Is(err, store.ErrHistoryLimit) {
 		_, _, err = a.st.UpdatePreview(id, nil, "", apply)
+	}
+	if errors.Is(err, store.ErrHistoryLimit) {
+		_, _, err = a.st.UpdatePreview(id, nil, "", func(r *types.Record) { r.PreviewState = "failed" })
 	}
 	if err != nil && !errors.Is(err, fs.ErrClosed) {
 		log.Print("saving link preview: ", err)

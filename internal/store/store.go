@@ -97,7 +97,7 @@ func OpenWithKey(dir string, key []byte) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.commitLocked(kept, references(s.records)); err != nil {
+	if err := s.commitLocked(kept, nil); err != nil {
 		return nil, err
 	}
 	// 清理启动前遗留的无引用文件，此时还没有采集或预览任务
@@ -178,7 +178,7 @@ func (s *Store) SetSettings(st types.Settings) error {
 	s.settings = st
 	kept, err := s.pruneLocked(s.records)
 	if err == nil {
-		err = s.commitLocked(kept, references(s.records), statement)
+		err = s.commitLocked(kept, nil, statement)
 	}
 	if err != nil {
 		s.settings = prev
@@ -282,7 +282,11 @@ func (s *Store) Capture(r *types.Record, imageData, iconData []byte) (*types.Rec
 	if len(iconData) > 0 {
 		pending[rec.Source.Icon] = int64(len(iconData))
 	}
-	if err := s.admitLocked(rec, pending); err != nil {
+	row, err := encodeRecord(rec)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := s.admitLocked(row.record, pending); err != nil {
 		return nil, false, err
 	}
 	for _, blob := range []struct {
@@ -296,10 +300,10 @@ func (s *Store) Capture(r *types.Record, imageData, iconData []byte) (*types.Rec
 			}
 		}
 	}
-	next = append([]*types.Record{rec}, next...)
+	next = append([]*types.Record{row.record}, next...)
 	kept, err := s.pruneLocked(next)
 	if err == nil {
-		err = s.commitLocked(kept, references(next))
+		err = s.commitLocked(kept, &row)
 	}
 	if err != nil {
 		s.removeUnusedLocked(pending)
@@ -354,9 +358,17 @@ func (s *Store) UpdatePreview(id string, data []byte, ext string, fn func(*types
 	if len(data) > 0 {
 		rec.PreviewImage = blobName(data, ext)
 		pending[rec.PreviewImage] = int64(len(data))
-		if err := s.admitLocked(rec, pending); err != nil {
+	}
+	row, err := encodeRecord(rec)
+	if err != nil {
+		return nil, false, err
+	}
+	if old.ListID == "" || len(data) > 0 {
+		if err := s.admitLocked(row.record, pending); err != nil {
 			return nil, false, err
 		}
+	}
+	if len(data) > 0 {
 		if err := s.saveBlobLocked(data, rec.PreviewImage); err != nil {
 			return nil, false, err
 		}
@@ -364,13 +376,13 @@ func (s *Store) UpdatePreview(id string, data []byte, ext string, fn func(*types
 	next := slices.Clone(s.records)
 	for i, r := range next {
 		if r.ID == id {
-			next[i] = rec
+			next[i] = row.record
 			break
 		}
 	}
 	kept, err := s.pruneLocked(next)
 	if err == nil {
-		err = s.commitLocked(kept, references(next))
+		err = s.commitLocked(kept, &row)
 	}
 	if err != nil {
 		s.removeUnusedLocked(pending)
