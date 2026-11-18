@@ -23,9 +23,15 @@ func (a *App) quickPasteRange(c *ui.Context) (first, last int) {
 		width, height := c.Size()
 		cardWidth, _ := a.barCardSize(height)
 		step := float64(cardWidth + cardGap)
-		first = int(math.Ceil(float64(a.strip.X) / step))
-		last = int(math.Floor(float64(a.strip.X+width-36-cardWidth)/step)) + 1
-		n = min(n, 90)
+		viewWidth := width - 36
+		if a.strip.MaxX > 0 && a.strip.X == a.strip.MaxX {
+			// 滚到最右时，从末张卡片向左计算完整可见的数量
+			first = n - int(math.Floor(float64(viewWidth+cardGap)/step))
+			last = n
+		} else {
+			first = int(math.Ceil(float64(a.strip.X) / step))
+			last = int(math.Floor(float64(a.strip.X+viewWidth-cardWidth)/step)) + 1
+		}
 	} else {
 		_, visibleLast := a.list.Visible()
 		_, height := c.Size()

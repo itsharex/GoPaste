@@ -306,7 +306,7 @@ func TestBarVisibleImages(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 	a := NewApp()
 	a.st = st
-	for i := range 90 {
+	for i := range 112 {
 		img := image.NewRGBA(image.Rect(0, 0, 8, 8))
 		img.SetRGBA(0, 0, color.RGBA{R: uint8(i), A: 255})
 		name, err := st.SaveBlob(encodePNG(img), "png")
@@ -320,7 +320,7 @@ func TestBarVisibleImages(t *testing.T) {
 		t.Fatalf("屏幕外图片被解码：%d 张", len(a.images.items))
 	}
 	maxX := a.strip.MaxX
-	if maxX < 14000 {
+	if want := float32(len(a.vis))*(cardW+cardGap) - cardGap - (900 - 36); maxX != want {
 		t.Fatalf("未保留完整滚动范围：%v", maxX)
 	}
 	a.releaseImages()
@@ -330,7 +330,7 @@ func TestBarVisibleImages(t *testing.T) {
 		t.Fatalf("滚动后的构建数量或范围异常：%d 张，%v / %v", len(a.images.items), a.strip.MaxX, maxX)
 	}
 	for key := range a.images.items {
-		if key == a.vis[0].Image || key == a.vis[89].Image {
+		if key == a.vis[0].Image || key == a.vis[len(a.vis)-1].Image {
 			t.Fatal("远离可见区域的图片被解码")
 		}
 	}

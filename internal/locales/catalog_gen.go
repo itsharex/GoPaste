@@ -1233,16 +1233,6 @@ func (msgs Messages) ExportImage() string {
 	return Catalog.Format(msgs.locale, "exportImage", nil)
 }
 
-// OlderRecordsHint says "用搜索找更早的内容"
-// in the language the app shows.
-func OlderRecordsHint() string { return In(i18n.Locale()).OlderRecordsHint() }
-
-// OlderRecordsHint says "用搜索找更早的内容"
-// in the language of msgs.
-func (msgs Messages) OlderRecordsHint() string {
-	return Catalog.Format(msgs.locale, "olderRecordsHint", nil)
-}
-
 // Updates says "软件更新"
 // in the language the app shows.
 func Updates() string { return In(i18n.Locale()).Updates() }
@@ -1599,16 +1589,6 @@ func RecordsPresent(count int) string { return In(i18n.Locale()).RecordsPresent(
 // in the language of msgs.
 func (msgs Messages) RecordsPresent(count int) string {
 	return Catalog.Format(msgs.locale, "recordsPresent", map[string]any{"count": count})
-}
-
-// MoreRecords says "还有 {count} 条"
-// in the language the app shows.
-func MoreRecords(count int) string { return In(i18n.Locale()).MoreRecords(count) }
-
-// MoreRecords says "还有 {count} 条"
-// in the language of msgs.
-func (msgs Messages) MoreRecords(count int) string {
-	return Catalog.Format(msgs.locale, "moreRecords", map[string]any{"count": count})
 }
 
 // MoreFiles says "另有 {count} 个文件"

@@ -4,8 +4,6 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/ui"
-
-	"gopaste/internal/locales"
 )
 
 // barView 按当前主题显示贴底长条并在预览时向上扩展
@@ -98,7 +96,7 @@ func visibleCards(offset, width, cardWidth float32, n int) (first, last int) {
 	return
 }
 
-// barStrip 按缩放后的卡片宽度构建可见内容并用占位维持滚动范围
+// barStrip 按缩放后的卡片宽度构建可见内容并保持完整滚动范围
 func (a *App) barStrip(c *ui.Context, p palette) {
 	n := len(a.vis)
 	if n == 0 {
@@ -109,10 +107,9 @@ func (a *App) barStrip(c *ui.Context, p palette) {
 	width, height := c.Size()
 	cardWidth, _ := a.barCardSize(height)
 	step := cardWidth + cardGap
-	shown := min(n, 90)
-	first, last := visibleCards(a.strip.X, width-36, cardWidth, shown)
+	first, last := visibleCards(a.strip.X, width-36, cardWidth, n)
 	scroll.Children(func() {
-		row := ui.Row(c).Gap(cardGap).AlignItems(ui.Center)
+		row := ui.Row(c).Width(float32(n)*step - cardGap).Gap(cardGap).AlignItems(ui.Center)
 		row.Children(func() {
 			if first > 0 {
 				ui.Box(c).Width(float32(first)*step - cardGap).Shrink(0)
@@ -120,15 +117,6 @@ func (a *App) barStrip(c *ui.Context, p palette) {
 			for i := first; i < last; i++ {
 				c.Key(a.vis[i].ID)
 				a.barCard(c, a.recordAt(i), i)
-			}
-			if last < shown {
-				ui.Box(c).Width(float32(shown-last)*step - cardGap).Shrink(0)
-			}
-			if n > shown {
-				ui.Column(c).Width(130).Gap(4).Padding(0, 8).Children(func() {
-					ui.Text(c, locales.MoreRecords(n-shown)).FontSize(11).TextColor(p.faint)
-					ui.Text(c, locales.OlderRecordsHint()).FontSize(10.5).TextColor(p.faint)
-				})
 			}
 		})
 	})
