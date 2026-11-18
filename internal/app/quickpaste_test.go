@@ -119,13 +119,12 @@ func TestQuickPaste(t *testing.T) {
 				if a.selected().ID != a.records[29].ID || a.hintFlash != locales.OriginalFileMissing() || a.query != "needle 29" {
 					t.Fatal("未粘贴搜索结果或未保留搜索")
 				}
-				a.preview = true
-				a.detail = a.selected()
+				a.openPreview()
 				tt.Frame()
 				if tt.HasText(prefix + "1") {
 					t.Fatal("预览中仍显示快速粘贴编号")
 				}
-				a.preview = false
+				a.closePreview()
 				a.query = ""
 				a.list.ScrollIntoView(0)
 				a.strip.X = 0

@@ -1,10 +1,12 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
+	"gopaste/internal/locales"
 	"gopaste/internal/types"
 )
 
@@ -268,6 +270,43 @@ func TestDeleteShortcut(t *testing.T) {
 		tt.Key(0, ui.KeyBackspace)
 		if a.preview || len(a.records) != 0 {
 			t.Fatal("预览中的 Backspace 未删除记录并关闭预览")
+		}
+	}
+}
+
+// TestPreviewShortcutTarget 验证切换列表后回车与退格仍操作正在预览的记录
+func TestPreviewShortcutTarget(t *testing.T) {
+	for _, form := range []int{formPanel, formBar} {
+		a := NewApp()
+		a.form, a.settings = form, types.DefaultSettings()
+		a.settings.CustomTabs = []types.Tab{{ID: "work", Name: "工作"}}
+		file := types.FileRef{Name: "预览文件.txt", Path: filepath.Join(t.TempDir(), "预览文件.txt")}
+		a.records = []*types.Record{
+			{ID: "preview", Kind: types.KindFile, Files: []types.FileRef{file}},
+			{ID: "other", Kind: types.KindImage, Image: "missing.png", ListID: "work"},
+		}
+		initTestStore(t, a)
+		tt := ui.NewTester(a.view, 1180, panelHeight)
+		tt.TypeKey(0, ui.KeySpace, " ")
+		if err := tt.Click("工作"); err != nil {
+			t.Fatal(err)
+		}
+		if !a.preview || !tt.HasText(file.Name) || len(a.vis) != 1 || a.vis[0].ID != "other" {
+			t.Fatal("切换列表后应继续显示原文件的预览")
+		}
+		if err := tt.Click(locales.SearchClipboard()); err != nil {
+			t.Fatal(err)
+		}
+		tt.Key(0, ui.KeyEnter)
+		if a.hintFlash != locales.OriginalFileMissing() {
+			t.Errorf("形态 %d 的回车没有粘贴预览文件，提示为 %q", form, a.hintFlash)
+		}
+		if form == formPanel {
+			tt.Key(0, ui.KeyTab)
+		}
+		tt.Key(0, ui.KeyBackspace)
+		if a.preview || len(a.records) != 1 || a.records[0].ID != "other" {
+			t.Errorf("形态 %d 的退格没有只删除预览文件并关闭预览", form)
 		}
 	}
 }

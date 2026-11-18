@@ -16,10 +16,7 @@ import (
 
 // previewPane 显示当前记录的完整内容与预览操作
 func (a *App) previewPane(c *ui.Context, p palette) {
-	rec := a.detail
-	if rec == nil {
-		rec = a.selected()
-	}
+	rec := a.selected()
 	box := ui.Column(c).Bind(&a.pasteAnchor)
 	if a.form == formBar {
 		box.Height(barPreview)

@@ -301,8 +301,11 @@ func (a *App) filtered() []*types.Record {
 	return out
 }
 
-// selected 返回键盘选中的卡片摘要
+// selected 返回正在预览的完整记录或列表中选中的卡片摘要
 func (a *App) selected() *types.Record {
+	if a.preview {
+		return a.detail
+	}
 	if a.sel >= 0 && a.sel < len(a.vis) {
 		return a.recordAt(a.sel)
 	}

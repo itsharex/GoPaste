@@ -125,9 +125,6 @@ func (a *App) pasteAsMenu(m *ui.Menu, rec *types.Record) {
 // openPasteAs 在当前记录或预览区域右侧打开原生粘贴格式菜单并在选择后执行粘贴
 func (a *App) openPasteAs(c *ui.Context) {
 	rec := a.selected()
-	if a.preview {
-		rec = a.detail
-	}
 	if rec == nil {
 		return
 	}
