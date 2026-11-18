@@ -13,7 +13,7 @@ import (
 )
 
 // initTestStore 将界面测试的设置与有序记录写入临时数据库并加载摘要索引
-func initTestStore(t *testing.T, a *App) {
+func initTestStore(t *testing.T, a *App, records ...*types.Record) {
 	t.Helper()
 	st, err := openTestStore(t.TempDir())
 	if err != nil {
@@ -23,8 +23,8 @@ func initTestStore(t *testing.T, a *App) {
 	if err := st.SetSettings(a.settings); err != nil {
 		t.Fatal(err)
 	}
-	for i := len(a.records) - 1; i >= 0; i-- {
-		if _, _, err := st.Capture(a.records[i], nil, nil); err != nil {
+	for i := len(records) - 1; i >= 0; i-- {
+		if _, _, err := st.Capture(records[i], nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

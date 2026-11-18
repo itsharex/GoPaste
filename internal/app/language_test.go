@@ -39,8 +39,8 @@ func TestLocalizedViews(t *testing.T) {
 			a.settings = types.DefaultSettings()
 			a.form = form
 			a.settings.CustomTabs = []types.Tab{{ID: "user", Name: "我的工作"}}
-			a.records = []*types.Record{{ID: "one", Kind: types.KindText, Text: "用户复制的内容"}}
-			initTestStore(t, a)
+			records := []*types.Record{{ID: "one", Kind: types.KindText, Text: "用户复制的内容"}}
+			initTestStore(t, a, records...)
 			w, h := panelWidth, panelHeight
 			if form == formBar {
 				w, h = 1180, barHeight

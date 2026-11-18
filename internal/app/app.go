@@ -63,7 +63,6 @@ type App struct {
 	tray   *mygo.Tray
 
 	settings types.Settings
-	records  []*types.Record
 
 	query string
 	tab   int
@@ -88,6 +87,8 @@ type App struct {
 
 	images       bitmapCache
 	previewImage cachedBitmap
+	// legacyPNGs 按资源名保存本次运行中已校验的旧版 PNG
+	legacyPNGs map[string]bool
 	// previewVideo 保存当前动图预览播放器
 	previewVideo *ui.VideoPlayer
 	// previewMediaPath 标识当前文件预览对应的原始图片
@@ -142,6 +143,7 @@ type App struct {
 func NewApp() *App {
 	return &App{
 		imageScale:      1,
+		legacyPNGs:      make(map[string]bool),
 		previewSlots:    make(chan struct{}, 2),
 		settingsPage:    "general",
 		updateTransport: &updateMirrorTransport{base: netproxy.Transport()},
@@ -244,18 +246,13 @@ func (a *App) refresh() {
 	a.win.Update(func() { a.reload() })
 }
 
-// reload 在主线程读取存储的只读记录并更新筛选与预览状态
+// reload 在主线程刷新设置、当前筛选结果与正在预览的记录
 func (a *App) reload() {
 	if a.st == nil {
 		return
 	}
 	a.lastReload = time.Now()
 	a.settings = a.st.Settings()
-	var err error
-	a.records, err = a.st.IDs(types.Tab{ID: "all"}, "")
-	if err != nil {
-		a.storageError(err)
-	}
 	a.filterValid = false
 	a.vis = a.filtered()
 	a.clampSel()

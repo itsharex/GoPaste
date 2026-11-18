@@ -152,8 +152,8 @@ func TestPasteAsImageFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := NewApp()
-	a.records = []*types.Record{{ID: "finder-image", Kind: types.KindFile, Files: []types.FileRef{{Path: path, Name: filepath.Base(path)}}}}
-	initTestStore(t, a)
+	records := []*types.Record{{ID: "finder-image", Kind: types.KindFile, Files: []types.FileRef{{Path: path, Name: filepath.Base(path)}}}}
+	initTestStore(t, a, records...)
 	rec := a.recordAt(0)
 	if !rec.Summary {
 		t.Fatal("未读取到图片文件摘要")
@@ -200,8 +200,8 @@ func TestPasteAsFileInfo(t *testing.T) {
 		{Path: filepath.Join(dir, ".gitignore")},
 		{Path: filepath.Join(dir, "folder.with.dot"), Dir: true},
 	}
-	a.records = []*types.Record{{ID: "files", Kind: types.KindFile, Files: files}}
-	initTestStore(t, a)
+	records := []*types.Record{{ID: "files", Kind: types.KindFile, Files: files}}
+	initTestStore(t, a, records...)
 	rec := a.recordAt(0)
 	if !rec.Summary || len(rec.Files) >= len(files) {
 		t.Fatal("未使用截断的文件摘要验证完整列表加载")

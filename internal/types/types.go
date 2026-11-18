@@ -53,6 +53,8 @@ type Record struct {
 	ImageH      int    `json:"imageH,omitempty"`
 	ImageFormat string `json:"imageFormat,omitempty"`
 	Animated    bool   `json:"animated,omitempty"`
+	// PNGValidated 标记采集时已完整校验的 PNG 原始数据
+	PNGValidated bool `json:"pngValidated,omitempty"`
 
 	// Link fields.
 	URL          string `json:"url,omitempty"`

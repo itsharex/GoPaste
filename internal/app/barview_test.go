@@ -19,11 +19,11 @@ func TestPasteFailureKeepsSearch(t *testing.T) {
 			a.form = form
 			a.settings = types.DefaultSettings()
 			a.settings.ResetPanelAfterPaste = reset
-			a.records = []*types.Record{{
+			records := []*types.Record{{
 				ID: "missing", Kind: types.KindFile, Text: "needle",
 				Files: []types.FileRef{{Path: filepath.Join(t.TempDir(), "missing.txt")}},
 			}}
-			initTestStore(t, a)
+			initTestStore(t, a, records...)
 			tt := ui.NewTester(a.view, 1180, panelHeight)
 			tt.Type("needle")
 			tt.Key(0, ui.KeyEnter)
@@ -43,10 +43,11 @@ func TestPanelClickDirectionKeys(t *testing.T) {
 			a := NewApp()
 			a.form, a.settings = formPanel, types.DefaultSettings()
 			a.settings.Theme = theme
+			var records []*types.Record
 			for i := range 20 {
-				a.records = append(a.records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %d", i)})
+				records = append(records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %d", i)})
 			}
-			initTestStore(t, a)
+			initTestStore(t, a, records...)
 			tt := ui.NewTester(a.view, panelWidth, panelHeight)
 			if err := tt.Click("记录 1"); err != nil || a.sel != 1 {
 				t.Fatalf("鼠标未选中记录：%d，%v", a.sel, err)
@@ -58,7 +59,7 @@ func TestPanelClickDirectionKeys(t *testing.T) {
 				}
 			}
 			tt.Key(0, ui.KeySpace)
-			if !a.preview || a.detail == nil || a.detail.ID != a.records[2].ID || a.sel != 2 {
+			if !a.preview || a.detail == nil || a.detail.ID != records[2].ID || a.sel != 2 {
 				t.Fatalf("鼠标选中后空格未预览当前选择：预览 %v，选择 %d", a.preview, a.sel)
 			}
 		})
@@ -95,11 +96,11 @@ func TestBarSearchInput(t *testing.T) {
 	a := NewApp()
 	a.form = formPanel
 	a.settings = types.DefaultSettings()
-	a.records = []*types.Record{
+	records := []*types.Record{
 		{ID: "target", Kind: types.KindText, Text: "目标记录 needle"},
 		{ID: "other", Kind: types.KindText, Text: "其他记录"},
 	}
-	initTestStore(t, a)
+	initTestStore(t, a, records...)
 	a.search.Focus()
 	tt := ui.NewTester(a.view, panelWidth, panelHeight)
 	for _, form := range []int{formBar, formPanel, formBar} {
@@ -113,7 +114,7 @@ func TestBarSearchInput(t *testing.T) {
 			t.Fatalf("切换到形态 %d 后搜索框未自动获得输入焦点", form)
 		}
 		tt.Type("needle")
-		if a.query != "needle" || len(a.vis) != 1 || a.vis[0].ID != a.records[0].ID {
+		if a.query != "needle" || len(a.vis) != 1 || a.vis[0].ID != records[0].ID {
 			t.Fatalf("搜索未生效：关键词 %q，结果 %d 条", a.query, len(a.vis))
 		}
 		tt.Key(ui.Cmd, ui.KeyA)
@@ -125,12 +126,12 @@ func TestBarSearchInput(t *testing.T) {
 func TestPanelDirectionKeys(t *testing.T) {
 	a := NewApp()
 	a.settings = types.DefaultSettings()
-	a.records = []*types.Record{
+	records := []*types.Record{
 		{ID: "first", Kind: types.KindText, Text: "needle 1"},
 		{ID: "second", Kind: types.KindText, Text: "needle 2"},
 		{ID: "third", Kind: types.KindText, Text: "needle 3"},
 	}
-	initTestStore(t, a)
+	initTestStore(t, a, records...)
 	tt := ui.NewTester(a.view, 1180, barHeight)
 	for _, form := range []int{formBar, formPanel, formBar} {
 		a.setForm(form)

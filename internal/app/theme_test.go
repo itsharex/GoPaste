@@ -340,7 +340,7 @@ func TestThemeSwitchAndPersistence(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 	a := NewApp()
 	a.st, a.settings = st, st.Settings()
-	a.records = []*types.Record{{ID: "preview", Kind: types.KindText, Text: "主题预览"}}
+	st.Add(&types.Record{ID: "preview", Kind: types.KindText, Text: "主题预览"})
 	panel := ui.NewTester(a.view, 1180, barHeight)
 	panel.Frame()
 	classic := bytes.Clone(panel.Image().Pix)
@@ -475,11 +475,12 @@ func TestGlassFloatingHeader(t *testing.T) {
 				a := NewApp()
 				a.st, a.settings, a.form = st, st.Settings(), formPanel
 				a.settings.Theme = themeGlass
+				var records []*types.Record
 				for i := range 30 {
-					a.records = append(a.records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindLink, PreviewImage: photo, URL: fmt.Sprintf("https://example.test/%d", i), Title: fmt.Sprintf("悬浮测试记录 %02d", i)})
+					records = append(records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindLink, PreviewImage: photo, URL: fmt.Sprintf("https://example.test/%d", i), Title: fmt.Sprintf("悬浮测试记录 %02d", i)})
 				}
-				for i := len(a.records) - 1; i >= 0; i-- {
-					st.Add(a.records[i])
+				for i := len(records) - 1; i >= 0; i-- {
+					st.Add(records[i])
 				}
 				tt := ui.NewTester(a.view, size.w, size.h)
 				tt.SetDark(dark)
@@ -488,7 +489,7 @@ func TestGlassFloatingHeader(t *testing.T) {
 				if !ok || !tt.Focused("搜索记录") {
 					t.Fatal("悬浮搜索框未显示或自动聚焦")
 				}
-				first, ok := tt.Find(recordTitle(a.records[0]))
+				first, ok := tt.Find(recordTitle(records[0]))
 				if !ok || first.Y < glassHeaderHeight {
 					t.Fatal("初始记录被悬浮控制区遮挡")
 				}
@@ -500,7 +501,7 @@ func TestGlassFloatingHeader(t *testing.T) {
 				if current, ok := tt.Find("搜索记录"); !ok || current != search {
 					t.Fatal("滚动改变了悬浮搜索框的位置")
 				}
-				under, ok := tt.Find(recordTitle(a.records[1]))
+				under, ok := tt.Find(recordTitle(records[1]))
 				if !ok || under.Y >= glassHeaderHeight {
 					t.Fatal("覆盖层拦截滚动或列表未经过玻璃下方")
 				}
@@ -520,13 +521,13 @@ func TestGlassFloatingHeader(t *testing.T) {
 				tt.Frame()
 				for range 10 {
 					tt.Key(0, ui.KeyUp)
-					r, ok := tt.Find(recordTitle(a.records[a.sel]))
+					r, ok := tt.Find(recordTitle(records[a.sel]))
 					if !ok || r.Y < glassHeaderHeight || r.Y+r.H > float32(size.h-30) {
 						t.Fatalf("键盘选择的记录被悬浮控制区遮挡：索引 %d，位置 %+v", a.sel, r)
 					}
 				}
 				tt.Type("悬浮测试记录 00")
-				if len(a.vis) != 1 || a.vis[0].ID != a.records[0].ID {
+				if len(a.vis) != 1 || a.vis[0].ID != records[0].ID {
 					t.Fatal("悬浮搜索框未更新筛选结果")
 				}
 				tt.Key(ui.Cmd, ui.KeyA)
@@ -558,10 +559,11 @@ func TestNewRecordScrollPosition(t *testing.T) {
 				a := NewApp()
 				a.form, a.settings = formPanel, types.DefaultSettings()
 				a.settings.Theme = theme
+				var records []*types.Record
 				for i := range 30 {
-					a.records = append(a.records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %02d", i)})
+					records = append(records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %02d", i)})
 				}
-				initTestStore(t, a)
+				initTestStore(t, a, records...)
 				tt := ui.NewTester(a.view, panelWidth, panelHeight)
 				tt.Frame()
 				first, ok := tt.Find("记录 00")

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -12,6 +13,38 @@ import (
 
 	"gopaste/internal/types"
 )
+
+// TestClipboardPNG 验证新旧图片粘贴的原始字节一致且损坏的旧 PNG 不会进入剪贴板
+func TestClipboardPNG(t *testing.T) {
+	a := NewApp()
+	initTestStore(t, a)
+	raw := sampleIcon()
+	name, err := a.st.SaveBlob(raw, "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, validated := range []bool{true, false, false} {
+		rec := &types.Record{Kind: types.KindImage, Image: name, PNGValidated: validated}
+		data, err := a.clipboardData(rec, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := data.Read(transfer.PNG)
+		if err != nil || !bytes.Equal(raw, got) {
+			t.Fatalf("粘贴改变了 PNG 字节：%v", err)
+		}
+		if a.legacyPNGs[name] == validated {
+			t.Fatal("旧图校验缓存与图片来源不符")
+		}
+	}
+	bad, err := a.st.SaveBlob(raw[:len(raw)-12], "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := a.clipboardData(&types.Record{Kind: types.KindImage, Image: bad}, false); err == nil || len(data.Items()) != 0 {
+		t.Fatal("截断的旧 PNG 仍然生成了粘贴数据")
+	}
+}
 
 // TestClipboardFileAccess 验证文件读取检查、权限失败授权入口及文件与目录的传输
 func TestClipboardFileAccess(t *testing.T) {

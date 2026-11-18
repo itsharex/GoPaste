@@ -67,8 +67,8 @@ func TestCustomPreviewShortcut(t *testing.T) {
 		a := NewApp()
 		a.settings = types.DefaultSettings()
 		a.form = form
-		a.records = []*types.Record{{ID: "preview", Kind: types.KindText, Text: "hello world"}}
-		initTestStore(t, a)
+		records := []*types.Record{{ID: "preview", Kind: types.KindText, Text: "hello world"}}
+		initTestStore(t, a, records...)
 		tt := ui.NewTester(a.view, 1180, panelHeight)
 		tt.Type("hello")
 		tt.Key(0, ui.KeySpace)
@@ -81,7 +81,7 @@ func TestCustomPreviewShortcut(t *testing.T) {
 		}
 		tt.Frame()
 		tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
-		if !a.preview || a.detail == nil || a.detail.ID != a.records[0].ID {
+		if !a.preview || a.detail == nil || a.detail.ID != records[0].ID {
 			t.Fatalf("形态 %d 的自定义预览快捷键未生效：预览 %v，记录 %v，结果 %d，按键 %q，动作 %v", form, a.preview, a.detail, len(a.vis), a.shortcutAccel("preview"), a.acted)
 		}
 	}
@@ -93,11 +93,11 @@ func TestSpacePreviewFromSearch(t *testing.T) {
 		a := NewApp()
 		a.settings = types.DefaultSettings()
 		a.form = form
-		a.records = []*types.Record{
+		records := []*types.Record{
 			{ID: "first", Kind: types.KindText, Text: "hello world"},
 			{ID: "second", Kind: types.KindText, Text: "second record"},
 		}
-		initTestStore(t, a)
+		initTestStore(t, a, records...)
 		tt := ui.NewTester(a.view, 1180, panelHeight)
 		next := ui.KeyDown
 		if form == formBar {
@@ -106,7 +106,7 @@ func TestSpacePreviewFromSearch(t *testing.T) {
 		tt.Key(0, next)
 		for range 2 {
 			tt.TypeKey(0, ui.KeySpace, " ")
-			if !a.preview || a.detail == nil || a.detail.ID != a.records[1].ID || a.query != "" {
+			if !a.preview || a.detail == nil || a.detail.ID != records[1].ID || a.query != "" {
 				t.Fatalf("形态 %d 的空格未预览当前记录：预览 %v，关键词 %q，选择 %d", form, a.preview, a.query, a.sel)
 			}
 			tt.Key(0, ui.KeyEscape)
@@ -142,12 +142,12 @@ func TestListShortcuts(t *testing.T) {
 			{ID: "work", Name: "工作"},
 			{ID: "smart", Name: "智能", Smart: true, Rules: []types.ListRule{{Field: types.RuleKind, Value: "text"}}},
 		}
-		a.records = []*types.Record{
+		records := []*types.Record{
 			{ID: "one", Kind: types.KindText, Text: "needle 1", ListID: "work"},
 			{ID: "two", Kind: types.KindText, Text: "needle 2", ListID: "work"},
 			{ID: "three", Kind: types.KindText, Text: "needle 3"},
 		}
-		initTestStore(t, a)
+		initTestStore(t, a, records...)
 		for id, key := range map[string]ui.Key{"previousList": ui.KeyBracketLeft, "nextList": ui.KeyBracketRight} {
 			if mods, got := a.shortcutKeys(id); mods != ui.Cmd || got != key {
 				t.Fatalf("%s 默认快捷键不正确：%v %v", id, mods, got)
@@ -208,13 +208,13 @@ func TestDeleteShortcut(t *testing.T) {
 	for _, form := range []int{formBar, formPanel} {
 		a := NewApp()
 		a.form, a.settings = form, types.DefaultSettings()
-		a.records = []*types.Record{
+		records := []*types.Record{
 			{ID: "first", Kind: types.KindText, Text: "first record"},
 			{ID: "second", Kind: types.KindText, Text: "needle record"},
 			{ID: "third", Kind: types.KindText, Text: "third record"},
 			{ID: "fourth", Kind: types.KindText, Text: "last record"},
 		}
-		initTestStore(t, a)
+		initTestStore(t, a, records...)
 		if mods, key := a.shortcutKeys("delete"); mods != 0 || key != ui.KeyBackspace {
 			t.Fatal("默认删除快捷键应为 Backspace")
 		}
@@ -228,23 +228,23 @@ func TestDeleteShortcut(t *testing.T) {
 		}
 		tt := ui.NewTester(a.view, 1180, panelHeight)
 		tt.Key(0, ui.KeyBackspace)
-		if _, ok := a.st.Get("first"); ok || len(a.records) != 3 {
+		if _, ok := a.st.Get("first"); ok || a.st.Count() != 3 {
 			t.Fatalf("形态 %d 的空搜索框未删除选中记录", form)
 		}
 		tt.Type("needle")
 		tt.Key(0, ui.KeyBackspace)
-		if a.query != "needl" || len(a.records) != 3 {
+		if a.query != "needl" || a.st.Count() != 3 {
 			t.Fatal("搜索框中的 Backspace 应只删除文字")
 		}
 		tt.Key(0, ui.KeyTab)
 		tt.Key(0, ui.KeyBackspace)
-		if _, ok := a.st.Get("second"); ok || len(a.records) != 2 || a.query != "needl" {
+		if _, ok := a.st.Get("second"); ok || a.st.Count() != 2 || a.query != "needl" {
 			t.Fatal("离开搜索框后未删除筛选记录或改变了搜索内容")
 		}
 		tt.Key(ui.Cmd, ui.KeyF)
 		tt.Key(ui.Cmd, ui.KeyA)
 		tt.Key(0, ui.KeyBackspace)
-		if a.query != "" || len(a.records) != 2 {
+		if a.query != "" || a.st.Count() != 2 {
 			t.Fatal("清空搜索文字时不应删除记录")
 		}
 		if err := a.setShortcut("delete", "F8"); err != nil {
@@ -252,11 +252,11 @@ func TestDeleteShortcut(t *testing.T) {
 		}
 		tt.Frame()
 		tt.Key(0, ui.KeyBackspace)
-		if len(a.records) != 2 {
+		if a.st.Count() != 2 {
 			t.Fatal("自定义删除键后仍响应默认 Backspace")
 		}
 		tt.Key(0, ui.KeyF8)
-		if _, ok := a.st.Get("third"); ok || len(a.records) != 1 {
+		if _, ok := a.st.Get("third"); ok || a.st.Count() != 1 {
 			t.Fatal("自定义删除快捷键未生效")
 		}
 		if err := a.setShortcut("delete", "Backspace"); err != nil {
@@ -268,7 +268,7 @@ func TestDeleteShortcut(t *testing.T) {
 			t.Fatal("未打开记录预览")
 		}
 		tt.Key(0, ui.KeyBackspace)
-		if a.preview || len(a.records) != 0 {
+		if a.preview || a.st.Count() != 0 {
 			t.Fatal("预览中的 Backspace 未删除记录并关闭预览")
 		}
 	}
@@ -281,11 +281,11 @@ func TestPreviewShortcutTarget(t *testing.T) {
 		a.form, a.settings = form, types.DefaultSettings()
 		a.settings.CustomTabs = []types.Tab{{ID: "work", Name: "工作"}}
 		file := types.FileRef{Name: "预览文件.txt", Path: filepath.Join(t.TempDir(), "预览文件.txt")}
-		a.records = []*types.Record{
+		records := []*types.Record{
 			{ID: "preview", Kind: types.KindFile, Files: []types.FileRef{file}},
 			{ID: "other", Kind: types.KindImage, Image: "missing.png", ListID: "work"},
 		}
-		initTestStore(t, a)
+		initTestStore(t, a, records...)
 		tt := ui.NewTester(a.view, 1180, panelHeight)
 		tt.TypeKey(0, ui.KeySpace, " ")
 		if err := tt.Click("工作"); err != nil {
@@ -305,7 +305,7 @@ func TestPreviewShortcutTarget(t *testing.T) {
 			tt.Key(0, ui.KeyTab)
 		}
 		tt.Key(0, ui.KeyBackspace)
-		if a.preview || len(a.records) != 1 || a.records[0].ID != "other" {
+		if a.preview || a.st.Count() != 1 || len(a.vis) != 1 || a.vis[0].ID != "other" {
 			t.Errorf("形态 %d 的退格没有只删除预览文件并关闭预览", form)
 		}
 	}
@@ -340,11 +340,11 @@ func TestPasteAsShortcut(t *testing.T) {
 			a := NewApp()
 			a.form, a.settings = form, types.DefaultSettings()
 			a.settings.Theme = theme
-			a.records = []*types.Record{
+			records := []*types.Record{
 				{ID: "first", Kind: types.KindText, Text: "needle first"},
 				{ID: "second", Kind: types.KindText, Text: "needle second"},
 			}
-			initTestStore(t, a)
+			initTestStore(t, a, records...)
 			if mods, key := a.shortcutKeys("pasteAs"); mods != ui.Shift || key != ui.KeyEnter {
 				t.Fatal("粘贴为默认快捷键应为 Shift+Enter")
 			}

@@ -1,12 +1,48 @@
 package clip
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/egoist/mygo/transfer"
 
+	"gopaste/internal/native"
 	"gopaste/internal/types"
 )
+
+// TestCapturePNG 验证采集拒绝截断图片并持久保存有效 PNG 的校验状态与原始字节
+func TestCapturePNG(t *testing.T) {
+	st, err := openTestStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	w := New(st, nil, nil, nil)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 5, 3))); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	bad := transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, raw[:len(raw)-12])))
+	if r, err := w.capture(bad, native.App{}); err == nil || r != nil || st.Count() != 0 {
+		t.Fatal("缺少结束块的 PNG 被采集")
+	}
+	data := transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, raw)))
+	r, err := w.capture(data, native.App{})
+	if err != nil || r == nil {
+		t.Fatalf("有效 PNG 采集失败：%v", err)
+	}
+	saved, ok := st.Get(r.ID)
+	if !ok || !saved.PNGValidated || saved.ImageW != 5 || saved.ImageH != 3 || saved.ImageFormat != "png" {
+		t.Fatal("图片尺寸、格式或校验状态未保存")
+	}
+	got, err := st.ReadBlob(saved.Image)
+	if err != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("采集改变了 PNG 原始字节：%v", err)
+	}
+}
 
 // TestBuildPreservesText 验证分类保留原始文本与 HTML 且不为域名或邮箱补全协议
 func TestBuildPreservesText(t *testing.T) {

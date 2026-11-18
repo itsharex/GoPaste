@@ -18,10 +18,11 @@ func TestListClickKeepsKeyboardNavigation(t *testing.T) {
 				a.form, a.settings = form, types.DefaultSettings()
 				a.settings.Theme = theme
 				a.settings.CustomTabs = []types.Tab{{ID: "work", Name: "工作"}}
+				var records []*types.Record
 				for i := range 3 {
-					a.records = append(a.records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %d", i), ListID: "work"})
+					records = append(records, &types.Record{ID: fmt.Sprint(i), Kind: types.KindText, Text: fmt.Sprintf("记录 %d", i), ListID: "work"})
 				}
-				initTestStore(t, a)
+				initTestStore(t, a, records...)
 				width, height, next, previous := panelWidth, panelHeight, ui.KeyDown, ui.KeyUp
 				if form == formBar {
 					width, height, next, previous = 1180, barHeight, ui.KeyRight, ui.KeyLeft
@@ -45,7 +46,7 @@ func TestListClickKeepsKeyboardNavigation(t *testing.T) {
 						t.Error("点击列表名称改变了原有输入焦点")
 					}
 					tt.TypeKey(0, ui.KeySpace, " ")
-					if !a.preview || a.detail == nil || a.detail.ID != a.records[1].ID || a.sel != 1 || a.query != "" {
+					if !a.preview || a.detail == nil || a.detail.ID != records[1].ID || a.sel != 1 || a.query != "" {
 						t.Fatalf("空格未预览当前记录：预览 %v，选择 %d，搜索 %q", a.preview, a.sel, a.query)
 					}
 					tt.Key(0, ui.KeyEscape)

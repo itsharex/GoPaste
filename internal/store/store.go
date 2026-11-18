@@ -186,6 +186,13 @@ func (s *Store) SetSettings(st types.Settings) error {
 	return err
 }
 
+// Count 从内存索引读取全部历史记录数
+func (s *Store) Count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.records)
+}
+
 // List 按顺序读取完整历史快照
 func (s *Store) List() []*types.Record {
 	s.mu.Lock()

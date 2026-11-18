@@ -25,13 +25,14 @@ func TestQuickPaste(t *testing.T) {
 				if form == formBar {
 					count = 123
 				}
+				var records []*types.Record
 				for i := range count {
-					a.records = append(a.records, &types.Record{
+					records = append(records, &types.Record{
 						ID: fmt.Sprint(i), Kind: types.KindFile, Text: fmt.Sprintf("needle %d", i), CreatedAt: time.Now(),
 						Files: []types.FileRef{{Name: fmt.Sprintf("记录 %02d", i), Path: filepath.Join(t.TempDir(), "missing.txt")}},
 					})
 				}
-				initTestStore(t, a)
+				initTestStore(t, a, records...)
 				width, height := panelWidth, panelHeight
 				if form == formBar {
 					width, height = 1180, barHeight
@@ -116,7 +117,7 @@ func TestQuickPaste(t *testing.T) {
 					t.Fatal("未显示的编号触发了粘贴")
 				}
 				tt.Key(ui.Cmd, ui.Key1)
-				if a.selected().ID != a.records[29].ID || a.hintFlash != locales.OriginalFileMissing() || a.query != "needle 29" {
+				if a.selected().ID != records[29].ID || a.hintFlash != locales.OriginalFileMissing() || a.query != "needle 29" {
 					t.Fatal("未粘贴搜索结果或未保留搜索")
 				}
 				a.openPreview()

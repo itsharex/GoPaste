@@ -275,7 +275,7 @@ func (a *App) settingsData(c *ui.Context, p palette) {
 				})
 			})
 			ui.Divider(c)
-			count := len(a.records)
+			count := a.st.Count()
 			settingRow(c, p, locales.ClearHistory(), locales.RecordsPresent(count), func() {
 				if a.themeButton(c, locales.ClearAction()).TextColor(p.danger).Clicked() {
 					res, err := mygo.Dialog.Message(mygo.MessageOptions{

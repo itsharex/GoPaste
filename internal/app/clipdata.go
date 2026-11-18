@@ -21,7 +21,7 @@ import (
 	"gopaste/internal/types"
 )
 
-// clipboardData 保留记录原文与格式，写入文件前检查读取权限，仅在指定纯文本时移除 HTML
+// clipboardData 保留原文与格式，直接传递已校验的 PNG 并检查文件读取权限
 func (a *App) clipboardData(rec *types.Record, plain bool) (transfer.Data, error) {
 	rec = a.fullRecord(rec)
 	if rec == nil {
@@ -42,8 +42,11 @@ func (a *App) clipboardData(rec *types.Record, plain bool) (transfer.Data, error
 		if err != nil {
 			return transfer.Data{}, errors.New(locales.ImageFileMissing())
 		}
-		if _, err := png.Decode(bytes.NewReader(data)); err != nil {
-			return transfer.Data{}, err
+		if !rec.PNGValidated && !a.legacyPNGs[rec.Image] {
+			if _, err := png.Decode(bytes.NewReader(data)); err != nil {
+				return transfer.Data{}, err
+			}
+			a.legacyPNGs[rec.Image] = true
 		}
 		return transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, data))), nil
 	case types.KindFile:

@@ -3,7 +3,9 @@
 package clip
 
 import (
+	"bytes"
 	"errors"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,7 +134,7 @@ func (w *Watcher) captureClipboard(change int64) (*types.Record, error) {
 	return w.capture(data, app)
 }
 
-// capture 应用排除规则并一次保存内容快照与来源图标
+// capture 应用排除规则、校验 PNG 并保存原始内容与来源图标
 func (w *Watcher) capture(data transfer.Data, app native.App) (*types.Record, error) {
 	settings := w.st.Settings()
 	if excludedClipboard(data.Formats(), app, settings) {
@@ -144,6 +146,12 @@ func (w *Watcher) capture(data transfer.Data, app native.App) (*types.Record, er
 	}
 	if rec == nil || excludedContent(rec, settings) {
 		return nil, nil
+	}
+	if len(image) > 0 {
+		if _, err := png.Decode(bytes.NewReader(image)); err != nil {
+			return nil, err
+		}
+		rec.PNGValidated = true
 	}
 	icon := w.fillSource(rec, app)
 	saved, _, err := w.st.Capture(rec, image, icon)

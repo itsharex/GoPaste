@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"gopaste/internal/locales"
 	"gopaste/internal/types"
 )
 
@@ -83,6 +84,10 @@ func TestFilterCacheChanges(t *testing.T) {
 	a.reload()
 	if len(a.filtered()) != 0 {
 		t.Fatal("删除记录仍留在筛选结果中")
+	}
+	settings := ui.NewTester(func(c *ui.Context) { a.settingsData(c, pal(c)) }, 560, 400)
+	if !settings.HasText(locales.RecordsPresent(2)) {
+		t.Fatal("当前列表为空时设置页未显示两条历史记录的总数")
 	}
 	a.tab = 0
 	if len(a.filtered()) != 2 {

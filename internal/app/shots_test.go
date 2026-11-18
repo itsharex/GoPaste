@@ -55,12 +55,12 @@ func TestShots(t *testing.T) {
 		{name: "panel-glass-quick-paste", form: formPanel, w: panelWidth, h: panelHeight, dark: true, hold: true, prep: func() { a.settings.Theme = themeGlass }},
 		{name: "bar-preview", form: formBar, w: 1180, h: barHeight + barPreview, prep: func() {
 			a.preview = true
-			a.detail = a.records[2]
+			a.detail = a.fullRecord(a.recordAt(2))
 		}},
 		{name: "bar-glass-preview", form: formBar, w: 1180, h: barHeight + barPreview, prep: func() {
 			a.settings.Theme = themeGlass
 			a.preview = true
-			a.detail = a.records[2]
+			a.detail = a.fullRecord(a.recordAt(2))
 		}},
 		{name: "panel-search", form: formPanel, w: panelWidth, h: panelHeight, prep: func() {
 			a.query = "报告"

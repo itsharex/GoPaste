@@ -116,8 +116,7 @@ func TestBarResizeLayout(t *testing.T) {
 		{ID: "first", Kind: types.KindText, Text: "resize-check"},
 		{ID: "second", Kind: types.KindText, Text: "resize-next"},
 	}
-	a.records = a.vis
-	initTestStore(t, a)
+	initTestStore(t, a, a.vis...)
 	tt := ui.NewTester(func(c *ui.Context) { a.barView(c, pal(c)) }, 1180, barHeight)
 	for _, height := range []int{barHeight, 400, barHeight, barHeight + barPreview} {
 		a.preview = height == barHeight+barPreview
@@ -148,11 +147,12 @@ func TestPasteAsAnchor(t *testing.T) {
 			a := NewApp()
 			a.form, a.settings = form, types.DefaultSettings()
 			a.settings.Theme = theme
+			var records []*types.Record
 			for i := range 20 {
 				text := fmt.Sprintf("anchor-record-%02d", i)
-				a.records = append(a.records, &types.Record{ID: text, Kind: types.KindText, Text: text})
+				records = append(records, &types.Record{ID: text, Kind: types.KindText, Text: text})
 			}
-			initTestStore(t, a)
+			initTestStore(t, a, records...)
 			var ctx *ui.Context
 			tt := ui.NewTester(func(c *ui.Context) { ctx = c; a.view(c) }, 1180, panelHeight)
 			previous := a.pasteAnchor.Bounds(ctx)

@@ -104,8 +104,8 @@ func TestHintDetails(t *testing.T) {
 			t.Run(fmt.Sprintf("form-%d-theme-%d", form, theme), func(t *testing.T) {
 				a := NewApp()
 				a.form, a.settings.Theme = form, theme
-				a.records = []*types.Record{{ID: "one", Kind: types.KindText, Text: "记录一"}, {ID: "two", Kind: types.KindText, Text: "记录二"}}
-				initTestStore(t, a)
+				records := []*types.Record{{ID: "one", Kind: types.KindText, Text: "记录一"}, {ID: "two", Kind: types.KindText, Text: "记录二"}}
+				initTestStore(t, a, records...)
 				message := locales.FileReadPermissionDenied() + "\nopen /Users/test/Library/Containers/" + strings.Repeat("long-path/", 80) + "图片.jpg: operation not permitted"
 				a.toast(message)
 				a.fileAuthorization = &fileAuthorization{path: "/Users/test/Library/Containers"}
