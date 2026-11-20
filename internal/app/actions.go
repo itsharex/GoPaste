@@ -157,7 +157,7 @@ func (a *App) paste(rec *types.Record, plain bool) {
 
 // pasteData 写入剪贴板并执行自动粘贴、记录排序与搜索重置
 func (a *App) pasteData(recordID string, data transfer.Data) {
-	if err := clip.Write(data); err != nil {
+	if err := clip.Write(a.win, data); err != nil {
 		a.toast(err.Error())
 		return
 	}
