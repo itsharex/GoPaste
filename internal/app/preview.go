@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -96,28 +95,28 @@ func (a *App) previewBody(c *ui.Context, p palette, r *types.Record) {
 	if r.Kind == types.KindImage && r.Animated && (r.ImageFormat == "gif" || r.ImageFormat == "webp") {
 		imagePath = r.Image
 		read = a.st.ReadBlob
-	} else if r.Kind == types.KindFile && len(r.Files) == 1 {
-		ext := strings.ToLower(filepath.Ext(r.Files[0].Path))
-		if ext == ".gif" || ext == ".webp" {
-			imagePath = r.Files[0].Path
-		}
+	} else if r.Kind == types.KindFile && len(r.Files) == 1 && previewableFile(r.Files[0]) {
+		imagePath = r.Files[0].Path
 	}
+	var filePreview *ui.Bitmap
 	if imagePath != "" {
-		body.Padding(12).Children(func() {
-			player, bitmap := a.previewImageFile(imagePath, max(w-24, h-100), read)
-			if player != nil {
-				ui.Video(c, player).Fill().Fit(ui.Contain).Radius(8).Label(recordTitle(r)).
-					ContextMenu(func(m *ui.Menu) { a.cardMenu(c, m, r) })
-			} else if bitmap != nil {
-				ui.Image(c, bitmap).Fill().Fit(ui.Contain).Radius(8).Label(recordTitle(r)).
-					ContextMenu(func(m *ui.Menu) { a.cardMenu(c, m, r) })
-			} else {
-				ui.Text(c, locales.ImageMissing()).FontSize(12).TextColor(p.warning).Center()
-			}
-		})
-		return
-	}
-	if a.previewMediaPath != "" {
+		player, bitmap := a.previewImageFile(imagePath, max(w-24, h-100), read)
+		if player != nil || r.Kind == types.KindImage {
+			body.Padding(12).Children(func() {
+				if player != nil {
+					ui.Video(c, player).Fill().Fit(ui.Contain).Radius(8).Label(recordTitle(r)).
+						ContextMenu(func(m *ui.Menu) { a.cardMenu(c, m, r) })
+				} else if bitmap != nil {
+					ui.Image(c, bitmap).Fill().Fit(ui.Contain).Radius(8).Label(recordTitle(r)).
+						ContextMenu(func(m *ui.Menu) { a.cardMenu(c, m, r) })
+				} else {
+					ui.Text(c, locales.ImageMissing()).FontSize(12).TextColor(p.warning).Center()
+				}
+			})
+			return
+		}
+		filePreview = bitmap
+	} else if a.previewMediaPath != "" {
 		a.releasePreview()
 	}
 	switch r.Kind {
@@ -175,7 +174,11 @@ func (a *App) previewBody(c *ui.Context, p palette, r *types.Record) {
 		})
 	case types.KindFile:
 		body.Padding(12).Children(func() {
-			ui.List(c.Key(r.ID), nil, len(r.Files), func(i int) {
+			if filePreview != nil {
+				ui.Image(c, filePreview).Grow(1).Fit(ui.Contain).Radius(8).
+					ContextMenu(func(m *ui.Menu) { a.cardMenu(c, m, r) })
+			}
+			files := ui.List(c.Key(r.ID), nil, len(r.Files), func(i int) {
 				f := r.Files[i]
 				rowEl := ui.Row(c).Padding(6, 8).Radius(7).Gap(8).AlignItems(ui.Center).
 					Focusable().Cursor(ui.CursorPointer)
@@ -193,7 +196,7 @@ func (a *App) previewBody(c *ui.Context, p palette, r *types.Record) {
 				})
 				rowEl.Children(func() {
 					if b := a.fileIcon(f.Path); b != nil {
-						ui.Image(c, b).Size(20, 20)
+						ui.Image(c, b).Size(20, 20).Fit(ui.Contain)
 					} else {
 						ui.Icon(c, icoFile).Size(14, 14).TextColor(p.faint)
 					}
@@ -212,6 +215,9 @@ func (a *App) previewBody(c *ui.Context, p palette, r *types.Record) {
 					a.later(func() { _ = mygo.Shell.OpenPath(f.Path) })
 				}
 			}).Fill().Gap(2)
+			if filePreview != nil {
+				files.Height(48)
+			}
 		})
 	default:
 		body.Padding(12).Children(func() {

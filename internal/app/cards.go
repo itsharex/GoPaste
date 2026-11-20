@@ -18,7 +18,7 @@ func (a *App) appIcon(r *types.Record) *ui.Bitmap {
 	return a.thumb(r.Source.Icon, 40)
 }
 
-// recordThumb 读取记录内容的图片、链接预览或文件图标
+// recordThumb 读取图片、链接与文件的缩略图或系统图标
 func (a *App) recordThumb(r *types.Record) *ui.Bitmap {
 	switch r.Kind {
 	case types.KindImage:
@@ -27,7 +27,11 @@ func (a *App) recordThumb(r *types.Record) *ui.Bitmap {
 		return a.thumb(r.PreviewImage, 56)
 	case types.KindFile:
 		if recordFileCount(r) > 0 {
-			return a.fileIcon(r.Files[0].Path)
+			f := r.Files[0]
+			if b := a.fileThumbnail(f, 56); b != nil {
+				return b
+			}
+			return a.fileIcon(f.Path)
 		}
 	}
 	return nil
@@ -223,6 +227,13 @@ func barBody(c *ui.Context, a *App, r *types.Record, p palette) {
 		})
 	case types.KindFile:
 		body.Gap(3).Children(func() {
+			if recordFileCount(r) == 1 {
+				_, height := c.Size()
+				width, _ := a.barCardSize(height)
+				if b := a.fileThumbnail(r.Files[0], width); b != nil {
+					ui.Image(c, b).Grow(1).Fit(ui.Contain)
+				}
+			}
 			names := make([]string, 0, 3)
 			for i, f := range r.Files {
 				if i == 3 {

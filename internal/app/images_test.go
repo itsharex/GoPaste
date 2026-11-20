@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/gif"
 	"os"
 	"path/filepath"
@@ -232,6 +233,36 @@ func TestGIFFileActualFormat(t *testing.T) {
 	tt.Frame()
 	if a.previewImage.image != bitmap {
 		t.Fatal("静态图片重绘时重复解码")
+	}
+}
+
+// TestPNGFilePreview 验证两种卡片和详情显示原文件内容且粘贴仍使用文件路径
+func TestPNGFilePreview(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 64, 32))
+	want := color.RGBA{R: 17, G: 152, B: 87, A: 255}
+	draw.Draw(img, img.Bounds(), image.NewUniform(want), image.Point{}, draw.Src)
+	path := filepath.Join(t.TempDir(), "图片.PNG")
+	if err := os.WriteFile(path, encodePNG(img), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rec := &types.Record{Kind: types.KindFile, Files: []types.FileRef{{Path: path, Name: filepath.Base(path)}}}
+	a := NewApp()
+	for _, render := range []func(*ui.Context){
+		func(c *ui.Context) { a.panelRow(c, rec, 0) },
+		func(c *ui.Context) { a.barCard(c, rec, 0) },
+		func(c *ui.Context) { a.previewBody(c, pal(c), rec) },
+	} {
+		tt := ui.NewTester(render, panelWidth, barHeight)
+		if !tt.HasText(filepath.Base(path)) || !bytes.Contains(tt.Image().Pix, []byte{want.R, want.G, want.B, want.A}) {
+			t.Fatal("文件名或 PNG 缩略图未显示")
+		}
+	}
+	data, err := a.clipboardData(rec, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paths, err := data.Files(); err != nil || len(paths) != 1 || paths[0] != path {
+		t.Fatalf("预览后的粘贴文件错误：%v，%v", paths, err)
 	}
 }
 

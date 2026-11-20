@@ -5,11 +5,15 @@ import (
 	"container/list"
 	"image"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"gopaste/internal/native"
+	"gopaste/internal/types"
 )
 
 const (
@@ -143,6 +147,36 @@ func (a *App) previewBitmap(name string, size float32) *ui.Bitmap {
 		}
 	}
 	return a.previewImage.image
+}
+
+// previewableFile 判断原文件是否使用支持预览的图片扩展名
+func previewableFile(f types.FileRef) bool {
+	if f.Dir || f.Missing {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(f.Path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
+		return true
+	}
+	return false
+}
+
+// fileThumbnail 从原文件按显示尺寸生成缩略图并复用内存缓存
+func (a *App) fileThumbnail(f types.FileRef, size float32) *ui.Bitmap {
+	if !previewableFile(f) {
+		return nil
+	}
+	key := bitmapKey{name: "thumbnail:" + f.Path, side: bitmapSide(a.imagePixels(size), thumbnailMaxSide)}
+	if b, ok := a.images.get(key); ok {
+		return b
+	}
+	data, err := os.ReadFile(f.Path)
+	if err == nil {
+		if img, err := native.Thumbnail(data, key.side); err == nil {
+			return a.images.put(key, ui.NewBitmap(img))
+		}
+	}
+	return a.images.put(key, nil)
 }
 
 // fileIcon 读取并缓存受统一字节预算限制的文件图标
