@@ -236,13 +236,8 @@ func (s *Store) Add(r *types.Record) (*types.Record, bool) {
 	return rec, merged
 }
 
-// Capture 在同一次提交中写入原图、来源图标与记录并应用历史容量限制
+// Capture 在锁外计算内容指纹，再串行去重、写入资源并提交容量裁剪结果
 func (s *Store) Capture(r *types.Record, imageData, iconData []byte) (*types.Record, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil, false, fs.ErrClosed
-	}
 	rec := cloneRecord(r)
 	if len(imageData) > 0 {
 		rec.Image = blobName(imageData, "png")
@@ -252,6 +247,11 @@ func (s *Store) Capture(r *types.Record, imageData, iconData []byte) (*types.Rec
 	}
 	if rec.Hash == "" {
 		rec.Hash = recordHash(rec)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, false, fs.ErrClosed
 	}
 	if rec.ID == "" {
 		rec.ID = NewID()

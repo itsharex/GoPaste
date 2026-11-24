@@ -19,7 +19,7 @@ import (
 	"gopaste/internal/types"
 )
 
-// TestImageBudget 验证缓存按字节淘汰且保留最近访问的图片
+// TestImageBudget 验证缓存按字节和条目数淘汰且保留最近访问项
 func TestImageBudget(t *testing.T) {
 	var cache bitmapCache
 	first := bitmapKey{name: "first"}
@@ -36,6 +36,16 @@ func TestImageBudget(t *testing.T) {
 	}
 	if _, ok := cache.get(bitmapKey{name: "0"}); ok {
 		t.Fatal("最早未使用的图片没有被淘汰")
+	}
+	for i := range thumbnailMaxItems + 1 {
+		cache.get(first)
+		cache.put(bitmapKey{name: fmt.Sprintf("missing-%d", i)}, nil)
+	}
+	if len(cache.items) != thumbnailMaxItems || cache.order.Len() != thumbnailMaxItems {
+		t.Fatal("加载失败的图片绕过了缓存条目上限")
+	}
+	if _, ok := cache.get(first); !ok {
+		t.Fatal("条目淘汰时丢失了最近访问的图片")
 	}
 	cache.trim(0)
 	if cache.bytes != 0 || len(cache.items) != 0 {

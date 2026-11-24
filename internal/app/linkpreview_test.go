@@ -84,10 +84,9 @@ func TestLinkPreviewConcurrency(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 	a := NewApp()
 	a.st = st
-	var wg sync.WaitGroup
 	for i := range 6 {
 		rec, _ := st.Add(&types.Record{Kind: types.KindLink, URL: fmt.Sprintf("%s/%d", server.URL, i), Hash: fmt.Sprint(i)})
-		wg.Go(func() { a.fetchPreview(rec.ID, rec.URL) })
+		a.queueLinkPreview(rec.ID, rec.URL)
 	}
 	for range 2 {
 		select {
@@ -104,7 +103,7 @@ func TestLinkPreviewConcurrency(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 	close(gate)
-	wg.Wait()
+	a.previews.wg.Wait()
 	if peak.Load() != 2 {
 		t.Fatalf("链接请求峰值异常：%d", peak.Load())
 	}
@@ -112,6 +111,66 @@ func TestLinkPreviewConcurrency(t *testing.T) {
 		if rec.PreviewState != "done" || rec.PreviewImage == "" {
 			t.Fatal("链接预览未完成")
 		}
+	}
+}
+
+// TestLinkPreviewShutdown 验证退出取消在途请求并在重启后恢复在途和排队的链接
+func TestLinkPreviewShutdown(t *testing.T) {
+	started := make(chan struct{}, 3)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+	dir := t.TempDir()
+	st, err := openTestStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := NewApp()
+	a.st = st
+	defer a.cancel()
+	defer st.Close()
+	for i := range 3 {
+		url := fmt.Sprintf("%s/%d", server.URL, i)
+		if _, _, err := st.Capture(&types.Record{Kind: types.KindLink, URL: url}, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.scheduleLinkPreviews()
+	for range 2 {
+		select {
+		case <-started:
+		case <-time.After(3 * time.Second):
+			t.Fatal("链接预览未开始")
+		}
+	}
+	a.shutdown()
+	done := make(chan struct{})
+	go func() {
+		a.previews.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("退出后仍在等待链接预览请求")
+	}
+	if len(started) != 0 {
+		t.Fatal("退出后启动了排队中的请求")
+	}
+	reopened, err := openTestStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if pending, err := reopened.PendingLinks(); err != nil || len(pending) != 3 {
+		t.Fatalf("重启后待处理链接未完整恢复：%d %v", len(pending), err)
 	}
 }
 

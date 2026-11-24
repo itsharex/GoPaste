@@ -19,6 +19,8 @@ import (
 const (
 	// thumbnailBudget 限制缩略图与图标及其缩小层级的解码缓存
 	thumbnailBudget = 12 << 20
+	// thumbnailMaxItems 限制小图与加载失败条目占用的索引空间
+	thumbnailMaxItems = 256
 	// thumbnailMaxSide 限制列表单张缩略图的最长像素边
 	thumbnailMaxSide = 512
 	// previewMaxSide 限制静态预览及其缩小层级合计不超过 8 MiB
@@ -73,9 +75,9 @@ func (b *bitmapCache) put(key bitmapKey, img *ui.Bitmap) *ui.Bitmap {
 	return img
 }
 
-// trim 将缓存缩减至指定解码预算并在零预算时移除全部条目
+// trim 按最近使用顺序同时限制解码字节和条目数，零预算时清空缓存
 func (b *bitmapCache) trim(budget int) {
-	for b.order.Len() > 0 && (b.bytes > budget || budget == 0) {
+	for b.order.Len() > 0 && (b.bytes > budget || b.order.Len() > thumbnailMaxItems || budget == 0) {
 		e := b.order.Back()
 		entry := e.Value.(cachedBitmap)
 		delete(b.items, entry.key.name)

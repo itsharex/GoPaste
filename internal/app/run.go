@@ -51,7 +51,14 @@ func Run() {
 	mygo.App.OnSecondInstance(func([]string, string) { a.show() })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.shutdown() })
 
-	if err := mygo.App.Run(); err != nil {
+	err := mygo.App.Run()
+	a.cancel()
+	// 主循环结束后再等待采集线程，避免与它排队中的主线程调用互相等待
+	if a.watchDone != nil {
+		<-a.watchDone
+	}
+	a.previews.wg.Wait()
+	if err != nil {
 		log.Fatal(err)
 	}
 }

@@ -2,15 +2,34 @@ package clip
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/png"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/transfer"
 
 	"gopaste/internal/native"
 	"gopaste/internal/types"
 )
+
+// TestWatcherCancellation 验证重复启动共用一次轮询且取消后能收到结束信号
+func TestWatcherCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	w := New(nil, nil, func() bool { return true }, nil)
+	done := w.Start(ctx)
+	if w.Start(ctx) != done {
+		t.Fatal("重复启动创建了新的采集线程")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("取消后采集线程未结束")
+	}
+}
 
 // TestCapturePNG 验证采集拒绝截断图片并持久保存有效 PNG 的校验状态与原始字节
 func TestCapturePNG(t *testing.T) {

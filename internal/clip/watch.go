@@ -4,6 +4,7 @@ package clip
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image/png"
 	"os"
@@ -31,10 +32,11 @@ type Watcher struct {
 	onError  func(error)
 	isPaused func() bool
 
-	mu      sync.Mutex
-	last    int64
-	icons   map[string][]byte
-	started bool
+	mu    sync.Mutex
+	last  int64
+	icons map[string][]byte
+	// done 在轮询退出后关闭，同一采集器只启动一次
+	done chan struct{}
 }
 
 // New 创建剪贴板采集器并在轮询线程回调记录变化或保存错误
@@ -42,24 +44,30 @@ func New(st *store.Store, onChange func(*types.Record), isPaused func() bool, on
 	return &Watcher{st: st, onChange: onChange, isPaused: isPaused, onError: onError, icons: map[string][]byte{}}
 }
 
-// Start 初始化来源跟踪并仅采集启动后的剪贴板变化
-func (w *Watcher) Start() {
+// Start 在主线程初始化来源跟踪，返回取消后轮询结束的信号
+func (w *Watcher) Start(ctx context.Context) <-chan struct{} {
 	w.mu.Lock()
-	if w.started {
-		w.mu.Unlock()
-		return
+	defer w.mu.Unlock()
+	if w.done != nil {
+		return w.done
 	}
-	w.started = true
+	w.done = make(chan struct{})
 	w.last, _ = native.ClipboardSource()
-	w.mu.Unlock()
 
 	go func() {
+		defer close(w.done)
 		t := time.NewTicker(pollInterval)
 		defer t.Stop()
-		for range t.C {
-			w.poll()
+		for ctx.Err() == nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				w.poll(ctx)
+			}
 		}
 	}()
+	return w.done
 }
 
 // Resync 将当前剪贴板变化计数设为采集基线
@@ -70,7 +78,7 @@ func (w *Watcher) Resync() {
 }
 
 // poll 检测剪贴板变化并回调采集结果或保存错误
-func (w *Watcher) poll() {
+func (w *Watcher) poll(ctx context.Context) {
 	if w.isPaused != nil && w.isPaused() {
 		w.Resync()
 		return
@@ -85,7 +93,10 @@ func (w *Watcher) poll() {
 	if same {
 		return
 	}
-	rec, err := w.captureClipboard(change)
+	rec, err := w.captureClipboard(ctx, change)
+	if ctx.Err() != nil {
+		return
+	}
 	if err != nil {
 		if w.onError != nil {
 			w.onError(err)
@@ -101,11 +112,14 @@ func (w *Watcher) poll() {
 }
 
 // captureClipboard 在主线程读取同一次剪贴板变化的来源与内容快照
-func (w *Watcher) captureClipboard(change int64) (*types.Record, error) {
+func (w *Watcher) captureClipboard(ctx context.Context, change int64) (*types.Record, error) {
 	var data transfer.Data
 	var app native.App
 	var err error
 	mygo.RunOnMain(func() {
+		if ctx.Err() != nil {
+			return
+		}
 		current, source := native.ClipboardSource()
 		if current != change {
 			return
@@ -125,6 +139,9 @@ func (w *Watcher) captureClipboard(change int64) (*types.Record, error) {
 			data, err = transfer.Data{}, nil
 		}
 	})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if errors.Is(err, mygo.ErrClipboardChanged) || errors.Is(err, transfer.ErrFormat) {
 		return nil, nil
 	}

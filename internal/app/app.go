@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -56,11 +57,16 @@ var shellReady bool
 
 // App 管理应用状态、窗口和交互，界面状态通过主线程更新
 type App struct {
-	st     *store.Store
-	watch  *clip.Watcher
-	win    *mygo.Window
-	setWin *mygo.Window
-	tray   *mygo.Tray
+	// ctx 随应用退出而取消剪贴板采集和链接预览
+	ctx    context.Context
+	cancel context.CancelFunc
+	// watchDone 在采集线程结束后关闭
+	watchDone <-chan struct{}
+	st        *store.Store
+	watch     *clip.Watcher
+	win       *mygo.Window
+	setWin    *mygo.Window
+	tray      *mygo.Tray
 
 	settings types.Settings
 
@@ -94,7 +100,7 @@ type App struct {
 	// previewMediaPath 标识当前文件预览对应的原始图片
 	previewMediaPath string
 	imageScale       float64
-	previewSlots     chan struct{}
+	previews         previewQueue
 	// dragImage 复用当前拖拽的紧凑预览像素缓冲
 	dragImage *image.RGBA
 
@@ -141,10 +147,13 @@ type App struct {
 
 // NewApp 创建应用状态并限制链接预览的并发任务数
 func NewApp() *App {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &App{
+		ctx:             ctx,
+		cancel:          cancel,
 		imageScale:      1,
 		legacyPNGs:      make(map[string]bool),
-		previewSlots:    make(chan struct{}, 2),
+		previews:        previewQueue{pending: make(map[string]string)},
 		settingsPage:    "general",
 		updateTransport: &updateMirrorTransport{base: netproxy.Transport()},
 	}
@@ -205,19 +214,28 @@ func (a *App) ready() {
 	a.setUpTray()
 
 	a.watch = clip.New(st, func(rec *types.Record) {
-		if st.Settings().CopySound {
-			mygo.RunOnMain(native.PlayCopySound)
+		settings := st.Settings()
+		if settings.CopySound {
+			mygo.RunOnMain(func() {
+				if a.ctx.Err() == nil {
+					native.PlayCopySound()
+				}
+			})
 		}
-		if rec != nil && rec.Kind == types.KindLink && rec.URL != "" && rec.PreviewState == "" {
-			go a.fetchPreview(rec.ID, rec.URL)
+		if settings.LinkPreview && rec != nil && rec.Kind == types.KindLink && rec.URL != "" && rec.PreviewState == "" {
+			a.queueLinkPreview(rec.ID, rec.URL)
 		}
 		a.refresh()
 	}, func() bool {
 		return st.Settings().Paused
 	}, func(err error) {
-		a.win.Update(func() { a.storageError(err) })
+		a.win.Update(func() {
+			if a.ctx.Err() == nil {
+				a.storageError(err)
+			}
+		})
 	})
-	a.watch.Start()
+	a.watchDone = a.watch.Start(a.ctx)
 
 	a.scheduleLinkPreviews()
 	a.applyHotkey()
@@ -227,8 +245,9 @@ func (a *App) ready() {
 	}
 }
 
-// shutdown 释放预览、托盘与记录存储
+// shutdown 通知后台任务退出并释放窗口与存储资源
 func (a *App) shutdown() {
+	a.cancel()
 	a.releaseImages()
 	if a.tray != nil {
 		a.tray.Destroy()
@@ -238,12 +257,16 @@ func (a *App) shutdown() {
 	}
 }
 
-// refresh rebuilds the panel from any goroutine.
+// refresh 将后台更新发往主线程并跳过退出后才送达的刷新
 func (a *App) refresh() {
 	if a.win == nil {
 		return
 	}
-	a.win.Update(func() { a.reload() })
+	a.win.Update(func() {
+		if a.ctx.Err() == nil {
+			a.reload()
+		}
+	})
 }
 
 // reload 在主线程刷新设置、当前筛选结果与正在预览的记录
